@@ -3,6 +3,7 @@ const cors = require('cors')
 const {Server } = require('socket.io')
 const http = require('http')
 const { connection } = require('./connection/db');
+const { AuthRouter } = require('./routes/auth.route');
 
 const PORT = process.env.PORT || 8080;
 
@@ -44,6 +45,7 @@ io.on('connection', (socket ) => {
     })
 })
 
+app.use('/auth', AuthRouter)
 
 server.listen(PORT, async() => {
     try{
