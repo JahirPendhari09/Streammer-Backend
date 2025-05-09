@@ -13,8 +13,6 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-console.log(transporter)
-
 const sendWelcomeMail = async email => {
     try {
         const html = `

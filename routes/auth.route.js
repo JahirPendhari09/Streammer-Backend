@@ -34,41 +34,11 @@ AuthRouter.post('/login', async(req, res) => {
     }
 })
 
-AuthRouter.post('/register', async (req, res) => {
-    const {email, password, firstName, lastName } = req.body
-    console.log(req.body)
-    try{
-        const isUserExist = await UserModal.findOne({email})
-        console.log(isUserExist)
-        if(isUserExist) {
-            res.status(200).send({ 'message': 'The provided email is already exist!'})
-        }else{
-            bcrypt.hash(password, SALT_ROUNDS, async (err, hash) => {
-                if(hash) {
-                    const newUser = new UserModal({
-                        email, 
-                        lastName, 
-                        firstName,
-                        password: hash
-                    })
-                    await newUser.save()
-                    res.status(200).send({'message': `New user Successfully registerd.`, user: newUser})
-                }else{
-                    res.status(400).send({'error': err})
-                }
-            });
-        }      
-    }catch(err) {
-        res.status(500).send({"Error": err})
-    }
-})
 
 AuthRouter.post('/register', async (req, res) => {
     const {email, password, firstName, lastName } = req.body
-    console.log(req.body)
     try{
         const isUserExist = await UserModal.findOne({email})
-        console.log(isUserExist)
         if(isUserExist) {
             res.status(200).send({ 'message': 'The provided email is already exist!'})
         }else{
@@ -92,4 +62,6 @@ AuthRouter.post('/register', async (req, res) => {
         res.status(500).send({"Error": err})
     }
 })
+
+
 module.exports = { AuthRouter }
