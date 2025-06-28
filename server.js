@@ -14,12 +14,15 @@ app.use(cors())
 const server = http.createServer(app)
 
 const io = new Server(server, {
-    cors: {
-        origin: 'http://localhost:5173',
-        methods: ['GET', 'POST'],
-        credentials: true
-    }
-})
+  cors: {
+    origin: 'http://localhost:5173',
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
+
+app.use(express.json());
+
 
 app.use(express.json())
 
@@ -27,25 +30,26 @@ app.get('/', (req,res) => {
     res.status(200).send("Hello World")
 })
 
-io.on('connection', (socket ) => {
-    console.log('io connected...')
-    console.log('ID', socket.id)
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
 
-    // socket.emit('Welcome' , "Welcome to the Server")
+  // Handle message event
+  socket.on("message", (data) => {
+    console.log('Message received:', data);
+    io.to(data.room).emit('receive_message', data.message); 
+  });
 
-    socket.on("message", (data) => {
-        console.log(data)
-        socket.to(data.room).emit('receive_message' , data.message)
-    })
+  // Join room
+  socket.on('join-room', (roomName) => {
+    socket.join(roomName);
+    console.log('User joined room:', roomName);
+  });
 
-    socket.on('join-room', (roomName) => {
-        socket.join(roomName)
-        console.log('user joined room')
-    })
-    socket.on('disconnect' ,() => {
-        console.log(`User Disconnected: ${socket.id}`)
-    })
-})
+  // Handle disconnect
+  socket.on('disconnect', () => {
+    console.log(`User disconnected: ${socket.id}`);
+  });
+});
 
 app.use('/auth', AuthRouter)
 
