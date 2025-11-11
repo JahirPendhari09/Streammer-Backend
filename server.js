@@ -4,6 +4,7 @@ const {Server } = require('socket.io')
 const http = require('http')
 const { connection } = require('./connection/db');
 const { AuthRouter } = require('./routes/auth.route');
+const { ProductRouter } = require('./routes/product.route')
 
 const PORT = process.env.PORT || 8080;
 
@@ -27,7 +28,7 @@ app.use(express.json());
 app.use(express.json())
 
 app.get('/', (req,res) => {
-    res.status(200).send("Hello World")
+    res.status(200).send("Welcome to the Streammer Server...")
 })
 
 io.on('connection', (socket) => {
@@ -52,6 +53,7 @@ io.on('connection', (socket) => {
 });
 
 app.use('/auth', AuthRouter)
+app.use('/product', ProductRouter)
 
 server.listen(PORT, async() => {
     try{

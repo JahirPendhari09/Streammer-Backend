@@ -3,7 +3,7 @@ const bcrypt = require('bcrypt');
 var jwt = require('jsonwebtoken');
 
 const { UserModal } = require('../models/userModel.model');
-const { sendWelcomeMail } = require('../controller/email');
+const { welcomeEmailJobQueue } = require('../message-queue/producer');
 
 require("dotenv").config()
 
@@ -51,7 +51,7 @@ AuthRouter.post('/register', async (req, res) => {
                         password: hash
                     })
                     await newUser.save()
-                    await sendWelcomeMail(email)
+                    await welcomeEmailJobQueue.add('sendWelcomeEmail', {email} )
                     res.status(200).send({'message': `New user Successfully registerd.`, user: newUser})
                 }else{
                     res.status(400).send({'error': err})
