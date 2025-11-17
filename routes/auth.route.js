@@ -1,6 +1,6 @@
 const express = require('express')
 const bcrypt = require('bcrypt');
-var jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 
 const { UserModal } = require('../models/userModel.model');
 const { welcomeEmailJobQueue } = require('../message-queue/producer');
@@ -40,7 +40,7 @@ AuthRouter.post('/register', async (req, res) => {
     try{
         const isUserExist = await UserModal.findOne({email})
         if(isUserExist) {
-            res.status(200).send({ 'message': 'The provided email is already exist!'})
+            res.status(404).send({ 'message': 'The provided email is already exist!'})
         }else{
             bcrypt.hash(password, SALT_ROUNDS, async (err, hash) => {
                 if(hash) {
@@ -63,5 +63,13 @@ AuthRouter.post('/register', async (req, res) => {
     }
 })
 
+AuthRouter.get('/all-users', async (req, res) =>{
+    try{
+        const users = await UserModal.find({}, {firstName: 1, lastName:1, email: 1}) 
+        res.status(200).send({ 'users': users})
+    }catch(err) {
+        res.status(500).send({"Error": err})
+    }
+})
 
 module.exports = { AuthRouter }
