@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors')
-const {Server } = require('socket.io')
+const { Server } = require('socket.io')
 const http = require('http')
 const { connection } = require('./connection/db');
 const { AuthRouter } = require('./routes/auth.route');
