@@ -2,7 +2,7 @@ const express = require('express')
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
-const { UserModal } = require('../models/userModel.model');
+const { UserModel } = require('../models/userModel.model');
 const { welcomeEmailJobQueue } = require('../message-queue/producer');
 
 require("dotenv").config()
@@ -15,14 +15,22 @@ const jwtScretKey = process.env.JWT_SCRET_KEY || 'jwt_scret_key'
 AuthRouter.post('/login', async(req, res) => {
     const { email, password } = req.body;
     try{
-        const user = await UserModal.findOne({ email })
+        const user = await UserModel.findOne({ email })
         if(!user) {
             res.status(200).send({ 'message': 'Incorrect credentials!'})
         }else{
             bcrypt.compare(password, user.password, (err, result) => {
                 if(result) {
-                    const jwtToken = jwt.sign({ user: user }, jwtScretKey , { expiresIn: 60 * 60 });  
-                    res.status(200).send({ 'message': 'Login Success', 'token': jwtToken })
+                    const jwtToken = jwt.sign({ userId: user._id, email: user.email }, jwtScretKey , { expiresIn: '7d' });  
+                    res.status(200).send({ 
+                        'message': 'Login Success', 
+                        'token': jwtToken, 
+                        user: {
+                          _id: user._id,
+                          firstName: user.firstName,
+                          lastName: user.lastName,
+                          email: user.email
+                    }})
                 }else {
                     res.status(200).send({ 'message': 'Invalid Password or invalid credentials' })
                 }
@@ -38,20 +46,20 @@ AuthRouter.post('/login', async(req, res) => {
 AuthRouter.post('/register', async (req, res) => {
     const {email, password, firstName, lastName } = req.body
     try{
-        const isUserExist = await UserModal.findOne({email})
+        const isUserExist = await UserModel.findOne({email})
         if(isUserExist) {
             res.status(404).send({ 'message': 'The provided email is already exist!'})
         }else{
             bcrypt.hash(password, SALT_ROUNDS, async (err, hash) => {
                 if(hash) {
-                    const newUser = new UserModal({
+                    const newUser = new UserModel({
                         email, 
                         lastName, 
                         firstName,
                         password: hash
                     })
                     await newUser.save()
-                    await welcomeEmailJobQueue.add('sendWelcomeEmail', {email} )
+                    // await welcomeEmailJobQueue.add('sendWelcomeEmail', {email} )
                     res.status(200).send({'message': `New user Successfully registerd.`, user: newUser})
                 }else{
                     res.status(400).send({'error': err})
@@ -65,7 +73,7 @@ AuthRouter.post('/register', async (req, res) => {
 
 AuthRouter.get('/all-users', async (req, res) =>{
     try{
-        const users = await UserModal.find({}, {firstName: 1, lastName:1, email: 1}) 
+        const users = await UserModel.find({}, {firstName: 1, lastName:1, email: 1}) 
         res.status(200).send({ 'users': users})
     }catch(err) {
         res.status(500).send({"Error": err})
