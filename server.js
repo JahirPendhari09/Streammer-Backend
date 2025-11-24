@@ -34,19 +34,10 @@ app.get('/', (req,res) => {
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
-  // Handle message event
-  // socket.on("message", async(data) => {
-  //   console.log('Message received:', data);
-  
-  //   io.to(data.room).emit('receive_message', data.message); 
-  // });
-
   // Receive and save message
-
   socket.on("message", async (data) => {
     try {
       const group = await GroupModel.findOne({ name: data.group });
-
       if (!group) {
         console.log("Group not found");
         return;
@@ -58,7 +49,6 @@ io.on('connection', (socket) => {
         toGroup: group._id,
         type: "text"
       });
-
       await newMessage.save();
 
       io.to(data.group).emit("receive_message", {
@@ -71,6 +61,24 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on("message_delete", async (data) => {
+    try {
+      const message = await MessageModel.findById(data.id);
+      if (!message) {
+        console.log("Message not found");
+        return;
+      }
+      await MessageModel.findByIdAndDelete(data.id);
+      
+      // Broadcast delete event to room
+      io.to(data.group).emit("user_message_deleted", {
+        id: data.id,
+      });
+      console.log("Message deleted:", data.id);
+    } catch (err) {
+      console.log("Error deleting message:", err);
+    }
+  });
 
   // Join room
   socket.on('join-group', (roomName) => {
