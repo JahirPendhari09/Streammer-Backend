@@ -7,6 +7,8 @@ const { AuthRouter } = require('./routes/auth.route');
 const { ProductRouter } = require('./routes/product.route');
 const { MessageRouter } = require('./routes/message.route');
 const { MessageModel, GroupModel } = require('./models/message.model');
+const { NotificationModel } = require('./models/notification.model');
+const { NotificationRouter } = require('./routes/notification.route');
 
 const PORT = process.env.PORT || 8080;
 
@@ -80,10 +82,41 @@ io.on('connection', (socket) => {
     }
   });
 
+  // When new notification is triggered
+  socket.on("send_notification", async (data) => {
+    try {
+      const newNotification = new NotificationModel({
+        sender: data.senderId,
+        receiver: data.receiverId,
+        message: data.message,
+        type: data.type,
+        link: data.link
+      });
+      await newNotification.save();
+
+      // emit to specific user
+      io.to(data.receiverId).emit("receive_notification", newNotification);
+
+      console.log("Notification sent:", newNotification);
+    } catch (err) {
+      console.log("Error saving notification:", err);
+    }
+  });
+
+  // Mark Notification as Read
+  socket.on("mark_as_read", async (id) => {
+    await NotificationModel.findByIdAndUpdate(id, { isRead:true });
+  });
+
   // Join room
   socket.on('join-group', (roomName) => {
     socket.join(roomName);
     console.log('User joined room:', roomName);
+  });
+
+  socket.on("join_user", (userId) => {
+    socket.join(userId);
+    console.log("User joined personal notification room:", userId);
   });
 
   // Handle disconnect
@@ -95,6 +128,7 @@ io.on('connection', (socket) => {
 app.use('/auth', AuthRouter)
 app.use('/product', ProductRouter)
 app.use('/chat', MessageRouter)
+app.use('/notification', NotificationRouter)
 
 server.listen(PORT, async() => {
     try{

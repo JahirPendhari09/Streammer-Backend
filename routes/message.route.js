@@ -1,6 +1,7 @@
 const express = require('express')
 const { authMiddleware } = require('../middleware/auth.middleware')
 const { GroupModel, GroupMemberModel, MessageModel } = require('../models/message.model')
+const { NotificationModel } = require('../models/notification.model')
 
 const MessageRouter = express.Router()
 
@@ -46,16 +47,39 @@ MessageRouter.post('/add-people', authMiddleware, async(req, res) => {
 })
 
 MessageRouter.get('/messages/:groupId', async (req, res) => {
-  try {
-    const group = await GroupModel.findOne({name: req.params.groupId})
-    const messages = await MessageModel.find({ toGroup: group._id })
-      .populate("sender", "firstName lastName avatar")
-      .sort({ createdAt: 1 });
+    try {
+        const group = await GroupModel.findOne({name: req.params.groupId})
+        const messages = await MessageModel.find({ toGroup: group._id })
+            .populate("sender", "firstName lastName avatar")
+            .sort({ createdAt: 1 });
 
-    res.status(200).send(messages);
-  } catch (error) {
-    res.status(500).send({ error: error.message });
-  }
+        res.status(200).send(messages);
+    } catch (error) {
+        res.status(500).send({ error: error.message });
+    }
 });
+
+MessageRouter.get('/get-group-people/:id', async(req, res) => {
+    try{
+        const group = await GroupModel.findOne({name: req.params.id})
+        if (!group) return res.status(404).send({ message: "Group not found" });
+        const members = await GroupMemberModel.find({ group: group._id })
+            .populate("user", "firstName lastName avatar role")
+            .select("role status createdAt user"); // Optional select fields
+
+        res.status(200).send(members);
+    } catch (error) {
+        res.status(500).send({ error: error.message });
+    }
+})
+
+MessageRouter.get('/get-user-notifications/:id', async(req, res) => {
+    try{
+        const notifications = await NotificationModel.find({ receiver: req.params.id })
+        res.status(200).send(notifications);
+    } catch (error) {
+        res.status(500).send({ error: error.message });
+    }
+})
 
 module.exports = { MessageRouter }
