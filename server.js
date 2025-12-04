@@ -9,6 +9,8 @@ const { MessageRouter } = require('./routes/message.route');
 const { MessageModel, GroupModel } = require('./models/message.model');
 const { NotificationModel } = require('./models/notification.model');
 const { NotificationRouter } = require('./routes/notification.route');
+const VideoRouter = require('./routes/video.route');
+const path = require('path');
 
 const PORT = process.env.PORT || 8080;
 
@@ -129,6 +131,10 @@ app.use('/auth', AuthRouter)
 app.use('/product', ProductRouter)
 app.use('/chat', MessageRouter)
 app.use('/notification', NotificationRouter)
+app.use('/videos', VideoRouter);
+
+// Serve images
+app.use('/images', express.static(path.join(__dirname, 'images')));
 
 server.listen(PORT, async() => {
     try{
