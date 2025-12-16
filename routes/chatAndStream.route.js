@@ -1,22 +1,9 @@
-const express = require('express');
-const cors = require('cors')
 const { Server } = require('socket.io')
-const http = require('http')
-const { connection } = require('./connection/db');
-const { AuthRouter } = require('./routes/auth.route');
-const { ProductRouter } = require('./routes/product.route');
-const { MessageRouter } = require('./routes/message.route');
 const { MessageModel, GroupModel } = require('./models/message.model');
 const { NotificationModel } = require('./models/notification.model');
-const { NotificationRouter } = require('./routes/notification.route');
-const VideoRouter = require('./routes/video.route');
-const path = require('path');
 const mediasoup = require('mediasoup');
+const { server } = require('../server');
 
-const PORT = process.env.PORT || 8080;
-
-const app = express();
-const server = http.createServer(app)
 
 const io = new Server(server, {
   cors: {
@@ -25,13 +12,6 @@ const io = new Server(server, {
     credentials: true
   }
 });
-app.use(cors())
-app.use(express.json());
-
-app.get('/', (req,res) => {
-    res.status(200).send("Welcome to the Streammer Server...")
-})
- 
 
 // Mediasoup worker
 let worker;
@@ -501,24 +481,3 @@ io.on('connection', (socket) => {
     peers.delete(socket.id);
   });
 });
-
-app.use('/auth', AuthRouter)
-app.use('/product', ProductRouter)
-app.use('/chat', MessageRouter)
-app.use('/notification', NotificationRouter)
-app.use('/videos', VideoRouter);
-
-// Serve images
-app.use('/images', express.static(path.join(__dirname, 'images')));
-
-server.listen(PORT, async() => {
-    try{
-        await connection
-        console.log(`MongoDB is running on ${PORT}`)
-        console.log('MongoDB atlas is connected...')
-    }catch(err) {
-        console.log("Error:", err)
-    }
-})
-
-module.exports = {server}
