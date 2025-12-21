@@ -85,7 +85,7 @@ async function createRoom(roomId) {
   rooms.set(roomId, {
     router,
     peers: new Map(),
-    screenSharingPeer: null
+    // screenSharingPeer: null
   });
 
   return router;
@@ -128,6 +128,7 @@ io.on('connection', (socket) => {
       io.to(data.group).emit("receive_message", {
         message: data.message,
         sender: data.user,
+        _id: newMessage._id,
         createdAt: newMessage.createdAt,
       });
     } catch (err) {
@@ -139,7 +140,7 @@ io.on('connection', (socket) => {
     try {
       const message = await MessageModel.findById(data.id);
       if (!message) {
-        console.log("Message not found");
+        console.log(`Message not found with: ${data.id}`);
         return;
       }
       await MessageModel.findByIdAndDelete(data.id);
@@ -192,8 +193,6 @@ io.on('connection', (socket) => {
   });
   
 
-  // ========== VIDEO CALL EVENTS ==========
-
   // Join room
   socket.on('join-room', async ({ roomId, userData }, callback) => {
     try {
@@ -222,7 +221,6 @@ io.on('connection', (socket) => {
       callback({
         rtpCapabilities: router.rtpCapabilities,
         peers: existingPeers,
-        screenSharingPeer: room.screenSharingPeer
       });
 
       // Notify others about new peer
@@ -251,7 +249,7 @@ io.on('connection', (socket) => {
         listenIps: [
           { 
             ip: '0.0.0.0', 
-            announcedIp: '127.0.0.1' // Change this to your server's public IP in production
+            announcedIp: '127.0.0.1' 
           }
         ],
         enableUdp: true,
@@ -299,19 +297,7 @@ io.on('connection', (socket) => {
     try {
       const peer = peers.get(socket.id);
       if (!peer) return callback({ error: 'Peer not found' });
-
-      const room = rooms.get(peer.roomId);
       
-      // Check screen sharing restriction
-      if (appData && appData.screen) {
-        if (room.screenSharingPeer && room.screenSharingPeer !== socket.id) {
-          return callback({ error: 'Another user is already sharing screen' });
-        }
-        room.screenSharingPeer = socket.id;
-        io.to(peer.roomId).emit('screen-share-started', { peerId: socket.id });
-      }
-
-
       const transport = peer.transports.get(transportId);
       if (!transport) return callback({ error: 'Transport not found' });
 
@@ -321,11 +307,6 @@ io.on('connection', (socket) => {
       producer.on('transportclose', () => {
         console.log('Producer transport closed:', producer.id);
         peer.producers.delete(producer.id);
-        
-        if (appData && appData.screen) {
-          room.screenSharingPeer = null;
-          io.to(peer.roomId).emit('screen-share-stopped', { peerId: socket.id });
-        }
       });
 
       callback({ id: producer.id });
@@ -338,7 +319,7 @@ io.on('connection', (socket) => {
         appData: appData || {}
       });
 
-      console.log(`Producer ${producer.id} created for ${socket.id}, kind: ${kind}, screen: ${appData?.screen || false}`);
+      console.log(`Producer ${producer.id} created for ${socket.id}, kind: ${kind}`);
     } catch (error) {
       console.error('Error producing:', error);
       callback({ error: error.message });
@@ -355,13 +336,11 @@ io.on('connection', (socket) => {
       const router = room.router;
 
       // Find the producer
-      let producerPeer = null;
       let producer = null;
       
       for (const [peerId, p] of room.peers.entries()) {
         for (const [pid, prod] of p.producers.entries()) {
           if (pid === producerId) {
-            producerPeer = p;
             producer = prod;
             break;
           }
@@ -443,30 +422,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Stop screen sharing
-  socket.on('stop-screen-share', () => {
-    const peer = peers.get(socket.id);
-    if (!peer) return;
-
-    const room = rooms.get(peer.roomId);
-    if (!room) return;
-
-    if (room.screenSharingPeer === socket.id) {
-      room.screenSharingPeer = null;
-      
-      // Close screen share producers
-      for (const [id, producer] of peer.producers.entries()) {
-        if (producer.appData && producer.appData.screen) {
-          producer.close();
-          peer.producers.delete(id);
-        }
-      }
-      
-      io.to(peer.roomId).emit('screen-share-stopped', { peerId: socket.id });
-      console.log(`Screen sharing stopped by ${socket.id}`);
-    }
-  });
-
   // Disconnect
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
@@ -476,12 +431,6 @@ io.on('connection', (socket) => {
 
     const room = rooms.get(peer.roomId);
     if (room) {
-      // Clear screen sharing if this peer was sharing
-      if (room.screenSharingPeer === socket.id) {
-        room.screenSharingPeer = null;
-        io.to(peer.roomId).emit('screen-share-stopped', { peerId: socket.id });
-      }
-
       room.peers.delete(socket.id);
       socket.to(peer.roomId).emit('peer-left', { peerId: socket.id });
 
