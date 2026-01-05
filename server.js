@@ -85,7 +85,14 @@ async function createRoom(roomId) {
   rooms.set(roomId, {
     router,
     peers: new Map(),
-    // screenSharingPeer: null
+    videoState: {
+      controllerId: null,
+      isPlaying: false,
+      currentTime: 0,
+      activeVideoUrl: null,
+      activeVideoPoster: null,
+      activeVideoName: null,
+    }
   });
 
   return router;
@@ -209,6 +216,7 @@ io.on('connection', (socket) => {
         transports: new Map(),
         producers: new Map(),
         consumers: new Map(),
+        hasVideoControl: false,
       });
 
       room.peers.set(socket.id, peers.get(socket.id));
@@ -228,6 +236,11 @@ io.on('connection', (socket) => {
         peerId: socket.id,
         userData
       });
+
+      // Send current video state to the new joiner
+      if (room.videoState.activeVideoUrl) {
+        socket.emit('video-state-update', room.videoState);
+      }
 
       console.log(`${socket.id} joined room ${roomId}. Total peers: ${room.peers.size}`);
     } catch (error) {
@@ -422,7 +435,124 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Disconnect
+  // REQUEST CURRENT VIDEO STATE (for new joiners)
+  socket.on('request-current-video-state', ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (room && room.videoState.activeVideoUrl) {
+      socket.emit('video-state-update', room.videoState);
+      console.log(`Sent current video state to ${socket.id}`);
+    }
+  });
+
+  // CHANGE VIDEO (when someone clicks a new video)
+  socket.on('change-video', ({ roomId, videoUrl, poster, name }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    const peer = peers.get(socket.id);
+    if (!peer) return;
+
+    // Automatically take control when changing video
+    // Release control from previous controller
+    for (const p of room.peers.values()) {
+      p.hasVideoControl = false;
+    }
+    
+    peer.hasVideoControl = true;
+
+    // Update room video state
+    room.videoState = {
+      controllerId: socket.id,
+      isPlaying: false,
+      currentTime: 0,
+      activeVideoUrl: videoUrl,
+      activeVideoPoster: poster,
+      activeVideoName: name,
+    };
+
+    // Broadcast to ALL peers including the sender
+    io.to(roomId).emit('video-state-update', room.videoState);
+
+    console.log(`${socket.id} changed video in room ${roomId} to ${name}`);
+  });
+
+  // REQUEST VIDEO CONTROL
+  socket.on('request-video-control', ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    // Check if someone already has control
+    const hasController = Array.from(room.peers.values()).some(
+      peer => peer.hasVideoControl
+    );
+
+    if (!hasController) {
+      const peer = peers.get(socket.id);
+      if (peer) {
+        peer.hasVideoControl = true;
+        
+        // Update state
+        room.videoState.controllerId = socket.id;
+        
+        // Notify all in room
+        io.to(roomId).emit('video-control-changed', {
+          controllerId: socket.id,
+        });
+
+        console.log(`${socket.id} took video control in room ${roomId}`);
+      }
+    }
+  });
+
+  // RELEASE VIDEO CONTROL
+  socket.on('release-video-control', ({ roomId }) => {
+    const peer = peers.get(socket.id);
+    const room = rooms.get(roomId);
+    
+    if (peer && room && peer.hasVideoControl) {
+      peer.hasVideoControl = false;
+      room.videoState.controllerId = null;
+
+      // Notify all in room
+      io.to(roomId).emit('video-control-changed', {
+        controllerId: null,
+      });
+
+      console.log(`${socket.id} released video control in room ${roomId}`);
+    }
+  });
+
+  // VIDEO ACTIONS (play, pause, seek)
+  socket.on("video-action", ({ roomId, action, currentTime }) => {
+    const room = rooms.get(roomId);
+    if (!room) return;
+
+    const peer = peers.get(socket.id);
+    
+    // Verify this peer has control
+    if (!peer || !peer.hasVideoControl) {
+      console.log(`${socket.id} tried to control video without permission`);
+      return;
+    }
+
+    // Update room state
+    if (action === "play") {
+      room.videoState.isPlaying = true;
+      room.videoState.currentTime = currentTime;
+    } else if (action === "pause") {
+      room.videoState.isPlaying = false;
+      room.videoState.currentTime = currentTime;
+    } else if (action === "seeked") {
+      room.videoState.currentTime = currentTime;
+    }
+
+    // Broadcast to ALL peers in room
+    io.to(roomId).emit("video-state-update", room.videoState);
+    
+    console.log(`Video action in room ${roomId}: ${action} at ${currentTime}`);
+  });
+
+  // DISCONNECT
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
 
@@ -431,6 +561,15 @@ io.on('connection', (socket) => {
 
     const room = rooms.get(peer.roomId);
     if (room) {
+      // If this peer had video control, release it
+      if (peer.hasVideoControl) {
+        room.videoState.controllerId = null;
+        io.to(peer.roomId).emit('video-control-changed', {
+          controllerId: null,
+        });
+        console.log(`${socket.id} disconnected, releasing video control`);
+      }
+
       room.peers.delete(socket.id);
       socket.to(peer.roomId).emit('peer-left', { peerId: socket.id });
 
